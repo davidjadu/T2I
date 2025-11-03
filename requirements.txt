@@ -1,0 +1,13 @@
+torch
+torchvision
+ninja
+cython
+pybind11
+fvcore
+iopath
+opencv-python
+matplotlib
+cloudpickle
+pycocotools
+tqdm
+omegaconf
