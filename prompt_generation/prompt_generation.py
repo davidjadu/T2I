@@ -128,30 +128,3 @@ class PromptGeneration:
         prompts.extend([self.llm_interface.generate(template + prompt) for _ in range(k-1)])
 
         return prompts
-
-if __name__ == "__main__":
-    # Mock metadata class for testing
-    class MockMetadata:
-        def get_rnd_objects(self, k):
-            objects = ["cat", "dog", "car", "tree", "house", "ball", "book", "chair"]
-            return np.random.choice(objects, k, replace=False).tolist()
-
-        def get_rnd_colors(self, k):
-            colors = ["red", "blue", "green", "yellow", "purple", "orange", "black", "white"]
-            return np.random.choice(colors, k, replace=False).tolist()
-
-    # Create instance with mock metadata
-    metadata = MockMetadata()
-    generator = MetaPromptGeneration(metadata)
-
-    # Test different skill combinations and levels
-    test_cases = [
-        ([Skills.COUNTING], "easy"),
-        ([Skills.COLOR, Skills.COUNTING], "medium"),
-        ([Skills.COLOR, Skills.COUNTING, Skills.SPATIAL], "hard"),
-    ]
-
-    for skills, level in test_cases:
-        print(f"\n--- Testing {skills} at {level} level ---")
-        prompt = generator.generate_prompt(skills, level)
-        print(prompt)
