@@ -34,9 +34,11 @@ class Detectron2ObjectDetector:
         instances = outputs["instances"].to("cpu")
 
         if save:
-            v = Visualizer(im[:, :, ::-1],
-                        metadata=self.metadata,
-                        instance_mode=ColorMode.IMAGE)
+            v = Visualizer(
+                im[:, :, ::-1],
+                metadata=self.metadata,
+                instance_mode=ColorMode.IMAGE
+            )
             vis = v.draw_instance_predictions(instances)
             cv2.imwrite(out_path, vis.get_image()[:, :, ::-1])
             print(f"saved: {out_path}")
@@ -44,14 +46,21 @@ class Detectron2ObjectDetector:
         boxes = instances.pred_boxes.tensor.numpy()
         classes = instances.pred_classes.numpy()
         scores = instances.scores.numpy()
+        masks = instances.pred_masks.numpy() if instances.has("pred_masks") else None  # already on CPU
 
         detections = []
-        for cls, score, box in zip(classes, scores, boxes):
+        for i, (cls, score, box) in enumerate(zip(classes, scores, boxes)):
             label = self.metadata.thing_classes[cls]
+
+            mask_avg = None
+            if masks is not None and i < len(masks):
+                mask_avg = float(masks[i].mean())
+
             detections.append({
                 "class": label,
                 "score": float(score),
-                "bbox": [float(x) for x in box.tolist()]
+                "bbox": [float(x) for x in box.tolist()],
+                "area": mask_avg,  # fraction of image area covered (0..1)
             })
 
         return {
@@ -59,7 +68,8 @@ class Detectron2ObjectDetector:
             "detections": detections
         }
 
-    def run_on_images(self, image_paths, out_dir="output", save=False):
+
+    def run_on_images(self, image_paths, out_dir="outputs", save=False):
         os.makedirs(out_dir, exist_ok=True)
         results = []  # list to store dicts of detections
 

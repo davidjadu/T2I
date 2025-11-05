@@ -4,6 +4,8 @@ data/images_metadata/
 outputs/
 config/
 
+evaluation/detectron/cache/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

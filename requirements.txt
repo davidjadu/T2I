@@ -11,3 +11,5 @@ cloudpickle
 pycocotools
 tqdm
 omegaconf
+python-dotenv
+langchain-openai
