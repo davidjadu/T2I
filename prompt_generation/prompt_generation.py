@@ -1,3 +1,4 @@
+import random
 import numpy as np
 from utils.skills import Skills,RobustnessTests
 
@@ -6,16 +7,23 @@ class MetaPromptGeneration:
         self.levels = ["easy", "medium", "hard"]
         self.data_type = "coco"
         self.metadata = metadata
-        self.scene = None
+        self.scene = {}
 
-    def _setup_scene(self, skills, level):
+    def _setup_scene(self, skills, level) -> dict:
+        scene = {}
+        if Skills.EMOTION in skills:
+            scene = self.apply_emotion(level, scene)
+            if skills==[Skills.EMOTION]:
+                self.scene = scene
+                return scene
 
+        # Every skill but emotion requires objects
         k=0
         match level:
             case "easy": k=2
             case "medium": k=3
             case "hard": k=4
-        scene = {"objects":[{"object":x} for x in self.metadata.get_rnd_objects(k=k)]}
+        scene["objects"] = [{"object":x} for x in self.metadata.get_rnd_objects(k=k)]
 
         if Skills.COUNTING in skills:
             scene = self.apply_counting(level, scene)
@@ -25,8 +33,6 @@ class MetaPromptGeneration:
             scene = self.apply_spatial(level, scene)
         if Skills.SIZE in skills:
             scene = self.apply_size(level, scene)
-        if Skills.EMOTION in skills:
-            scene = self.apply_emotion(level, scene)
 
         self.scene = scene
 
@@ -34,29 +40,31 @@ class MetaPromptGeneration:
 
     def generate_meta_prompt(self, skills, level):
         scene = self._setup_scene(skills, level)
-        template = "You are generating a prompt for an image generation model. The scene contains the following objects"
+        template = "Create a natural language text description for an image that contains the following elements"
 
         if Skills.COLOR in skills:
-            template += " of the given colors"
+            template += " with specified colors"
         if Skills.COUNTING in skills:
-            template += " with the given quantities"
+            template += " and quantities"
 
         template += ": "
         for obj in scene["objects"]:
             template += f"{obj}, "
-        template = template[:-2] + ".\n"
+        template = template[:-2] + "."
 
         if Skills.EMOTION in skills:
             for emotion in scene['emotion']:
-                template += f" The scene should have a {emotion} person.\n"
+                template += f" Include a person showing {emotion}."
 
         if Skills.SPATIAL in skills:
             for o1, relationship, o2 in scene['spatial_relations']:
-                template += f" The {o1}(s) must be {relationship} the {o2}(s).\n"
+                template += f" Position the {o1}(s) {relationship} the {o2}(s)."
 
         if Skills.SIZE in skills:
             for o1, relationship, o2 in scene['size_relations']:
-                template += f" The {o1}(s) must be {relationship} the {o2}(s).\n"
+                template += f" Make the {o1}(s) {relationship} than the {o2}(s)."
+
+        template += " Output ONLY prompt, no comment, no explanations."
 
         print("Generated Scene:", scene)
         return template
@@ -81,14 +89,61 @@ class MetaPromptGeneration:
             scene['objects'][i]['color'] = colors[i]
         return scene
 
-    def apply_spatial(self, _, scene):
-        raise NotImplementedError
+    def apply_spatial(self, level, scene):
+        # Note that transitivity problems are avoided via the choice of objects.
+        if level == "easy":
+            # One binary relation
+            rel = self.metadata.get_rnd_spatial_relations(1)
+            objs = random.sample([obj['object'] for obj in scene['objects']], k=2)
+            scene['spatial_relations'] = [(objs[0], rel[0], objs[1])]
+            return scene
+        elif level == "medium":
+            # Two binary relations in 3 objects
+            rel = self.metadata.get_rnd_spatial_relations(2)
+            objs = random.sample([obj['object'] for obj in scene['objects']], k=3)
+            # O0 ~ r1 O1 and O0 ~ r2 O2 to mimic previous code structure
+            scene['spatial_relations'] = [(objs[0], rel[0], objs[1]), (objs[0], rel[1], objs[2])]
+            return scene
+        elif level == "hard":
+            # Two binary relations in 4 objects
+            rel = self.metadata.get_rnd_spatial_relations(2)
+            objs = random.sample([obj['object'] for obj in scene['objects']], k=4)
+            # O0 ~ r1 O1 and O2 ~ r2 O3 to mimic previous code structure.
+            scene['spatial_relations'] = [(objs[0], rel[0], objs[1]), (objs[2], rel[1], objs[3])]
+            return scene
 
-    def apply_size(self, _, scene):
-        raise NotImplementedError
+    def apply_size(self, level, scene):
+        if level == "easy":
+            # One binary relation
+            rel = self.metadata.get_rnd_size_relations()
+            objs = random.sample([obj['object'] for obj in scene['objects']], k=2)
+            scene['size_relations'] = [(objs[0], rel[0], objs[1])]
+            return scene
+        elif level == "medium":
+            # Two binary relations in 3 objects
+            rel = self.metadata.get_rnd_size_relations(2)
+            objs = random.sample([obj['object'] for obj in scene['objects']], k=3)
+            # O0 ~ r1 O1 and O0 ~ r2 O2 to mimic previous code structure
+            scene['size_relations'] = [(objs[0], rel[0], objs[1]), (objs[0], rel[1], objs[2])]
+            return scene
+        elif level == "hard":
+            # Two binary relations in 4 objects
+            rel = self.metadata.get_rnd_size_relations(2)
+            objs = random.sample([obj['object'] for obj in scene['objects']], k=4)
+            # O0 ~ r1 O1 and O2 ~ r2 O3 to mimic previous code structure.
+            scene['size_relations'] = [(objs[0], rel[0], objs[1]), (objs[2], rel[1], objs[3])]
+            return scene
 
-    def apply_emotion(self, _, scene):
-        raise NotImplementedError
+    def apply_emotion(self, level, scene):
+        k=0
+        match level:
+            case "easy": k=1
+            case "medium": k=2
+            case "hard": k=3
+
+        emotions = self.metadata.get_rnd_emotions(k=k)
+        scene['emotion'] = emotions
+        return scene
 
 class PromptGeneration:
     def __init__(self,llm_interface):
@@ -115,16 +170,18 @@ class PromptGeneration:
         prompts = [prompt]
 
         template = ""
-
         if RobustnessTests.TYPOS in robustness_test and RobustnessTests.CONSISTENCY in robustness_test:
-            template = "Paraphrase the following prompt and introduce some typos while keeping its meaning intact:\n"
+            template = "Rewrite the following image prompt in a different way while adding a few small spelling mistakes."
 
         elif RobustnessTests.TYPOS in robustness_test:
-            template = "Introduce some typos in the following prompt while keeping its meaning intact:\n"
+            template = "Add a few small spelling mistakes to the following image prompt."
 
         elif RobustnessTests.CONSISTENCY in robustness_test:
-            template = "Paraphrase the following prompt while keeping its meaning intact:\n"
+            template = "Rewrite the following image prompt using different words but keeping exactly the same meaning."
 
-        prompts.extend([self.llm_interface.generate(template + prompt) for _ in range(k-1)])
+        template = template + " " + " Output ONLY the modified prompt, no explanations:"
+
+        if template:
+            prompts.extend([self.llm_interface.generate(template + prompt) for _ in range(k-1)])
 
         return prompts
