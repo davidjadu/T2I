@@ -1,0 +1,19 @@
+experiment:
+  name: "color_counting_spatial_size_experiment_v1"
+ 
+prompt_generation:
+  metadata_config:
+    name: "coco"
+  skills:
+    - level: "easy"
+      skills: ["counting", "color", "spatial_relations", "size_relations"]
+      robustness: ["typos"]
+      k: 4
+  llm_model:
+    name: "openai"
+    model: "gpt4"
+    temperature: 0.2
+  samples_per_skill: 4
+ 
+output:
+  file: "outputs/prompts/color_counting_spatial_size_v1_prompts.json"

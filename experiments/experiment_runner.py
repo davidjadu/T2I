@@ -45,7 +45,7 @@ class ExperimentRunner:
 
         for skill_config in config['prompt_generation']['skills']:
             level = skill_config['level']
-            skills = skill_config['skills']
+            skills = skill_config['skills']        
             robustness = skill_config.get('robustness', [])
             k = skill_config.get('k', 1)
 
