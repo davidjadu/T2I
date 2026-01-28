@@ -9,7 +9,7 @@ class MetaPromptGeneration:
         self.metadata = metadata
         self.scene = {}
 
-    def _setup_scene(self, skills, level) -> dict:
+    def _setup_scene(self, skills, level):
         scene = {}
         if Skills.EMOTION in skills:
             scene = self.apply_emotion(level, scene)
@@ -33,36 +33,50 @@ class MetaPromptGeneration:
             scene = self.apply_spatial(level, scene)
         if Skills.SIZE in skills:
             scene = self.apply_size(level, scene)
+        if Skills.TEXT in skills:
+            scene = self.apply_text(level, scene)
 
         self.scene = scene
 
         return scene
 
     def generate_meta_prompt(self, skills, level):
+
         scene = self._setup_scene(skills, level)
-        template = "Create a natural language text description for an image that contains the following elements"
 
-        if Skills.COLOR in skills:
-            template += " with specified colors"
-        if Skills.COUNTING in skills:
-            template += " and quantities"
+        template = "Create a natural language text description for an image"
 
-        template += ": "
-        for obj in scene["objects"]:
-            template += f"{obj}, "
-        template = template[:-2] + "."
+        if scene and "objects" in scene:
+            template += " that contains the following elements"
+
+            if Skills.COLOR in skills:
+                template += " with specified colors"
+            if Skills.COUNTING in skills:
+                template += " and quantities"
+
+            template += ": "
+            for obj in scene["objects"]:
+                template += f"{obj}, "
+            template = template[:-2] + "."
+
+            if Skills.SPATIAL in skills:
+                for o1, relationship, o2 in scene['spatial_relations']:
+                    template += f" Position the {o1}(s) {relationship} the {o2}(s)."
+
+            if Skills.SIZE in skills:
+                for o1, relationship, o2 in scene['size_relations']:
+                    template += f" Make the {o1}(s) {relationship} than the {o2}(s)."
+
+            if Skills.TEXT in skills:
+                word_count = scene['text']['word_count']
+                objects = ", ".join(scene['text']['objects'])
+                template += f" The image must include visible text (on a sign, note, paper, label, or screen) with exactly {word_count} words written about {objects}."
+        else:
+            template +="."
 
         if Skills.EMOTION in skills:
             for emotion in scene['emotion']:
                 template += f" Include a person showing {emotion}."
-
-        if Skills.SPATIAL in skills:
-            for o1, relationship, o2 in scene['spatial_relations']:
-                template += f" Position the {o1}(s) {relationship} the {o2}(s)."
-
-        if Skills.SIZE in skills:
-            for o1, relationship, o2 in scene['size_relations']:
-                template += f" Make the {o1}(s) {relationship} than the {o2}(s)."
 
         template += " Output ONLY prompt, no comment, no explanations."
 
@@ -143,6 +157,19 @@ class MetaPromptGeneration:
 
         emotions = self.metadata.get_rnd_emotions(k=k)
         scene['emotion'] = emotions
+        return scene
+
+    def apply_text(self,level, scene):
+        low, high,k = 0,0,0
+        match level:
+            case "easy": low = 1; high = 3; k=1
+            case "medium": low = 4; high = 6; k=2
+            case "hard": low = 6; high = 8; k=2
+
+        word_count = np.random.randint(low=low, high=high+1)
+        objects = random.sample([obj['object'] for obj in scene['objects']], k=k)
+        scene["text"] = {"word_count": word_count, "objects": objects}
+
         return scene
 
 class PromptGeneration:

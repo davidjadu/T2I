@@ -14,10 +14,11 @@ class CocoMetadata(BaseMetadata):
             "red", "blue", "green", "yellow", "black", "white",
             "orange", "purple", "pink", "brown", "gray"
         ]
-        self.objects = self._load_from_file("data/COCO/objects.txt")
         self.emotions = [
             "joy", "sadness", "anger", "fear", "disgust", "surprise", "trust", "anticipation"
         ]
+        # Load objects from file, excluding "knife". "knife" triggers content filters.
+        self.objects = [obj for obj in self._load_from_file("data/COCO/objects.txt") if obj.lower() != "knife"]
 
     def get_rnd_objects(self, k=1):
         return random.sample(self.objects, k) if self.objects else None
