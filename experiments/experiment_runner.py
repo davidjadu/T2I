@@ -97,3 +97,10 @@ class ExperimentRunner:
 
         # TODO: Add evaluation logic here
         print("Evaluation completed")
+        """
+        0. Load a specific model, load the eval skills from ArgParser
+        1. Loop through the generated images folder
+        2. For each image, evaluate specific skills and write model's response into a file
+        3. Compute metrics
+        4. Write metrics into 
+        """
