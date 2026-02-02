@@ -3,7 +3,7 @@ import os
 import time
 import torch
 import traceback
-from diffusers import  DiffusionPipeline, StableCascadeCombinedPipeline, ZImagePipeline, AutoPipelineForText2Image
+from diffusers import  DiffusionPipeline, StableCascadeCombinedPipeline, ZImagePipeline, StableDiffusionXLPipeline
 from dotenv import load_dotenv
 
 
@@ -239,7 +239,7 @@ def test_stable_diffusion(prompt:str, access_token:str, negative_prompt=""):
         return -1
 
 
-def test_kandinsky(prompt:str, access_token:str, negative_prompt=""):
+#def test_kandinsky(prompt:str, access_token:str, negative_prompt=""):
     """
     Tests the Kandinsky model. 
     Steps : 
@@ -285,7 +285,7 @@ def test_kandinsky(prompt:str, access_token:str, negative_prompt=""):
         return -1
     
 
-#def test_animagine_XL(prompt:str, access_token:str, negative_prompt=""):
+def test_animagine_XL(prompt:str, access_token:str, negative_prompt=""):
     """
     Tests the Animagine model. 
     Steps : 
@@ -322,6 +322,15 @@ def test_kandinsky(prompt:str, access_token:str, negative_prompt=""):
 
         # Display elapsed time
         print(f"Elapsed time: {round(time.time()-start_time,2)} seconds.")
+        # Free memory
+        del(image)
+        del(pipe)
+        # Collect garbage
+        gc.collect()
+        # Empty cuda cache
+        torch.cuda.empty_cache()
+        # Collect garbage
+        torch.cuda.ipc_collect()
 
         return 1
     except Exception: 
@@ -369,8 +378,26 @@ def test_models(access_token,models=[""], prompt=""):
             else: 
                 # Success
                 print("\n\nZ-Image Turbo : OK\n\n")
+        # Animagine XL
+        elif model=="cagliostrolab/animagine-xl-4.0":
+            # Test the Animagine model
+            if test_animagine_XL(prompt, access_token, negative_prompt)==-1:
+                # Failure 
+                print("\n\nAnimagine: KO\n\n")
+            else: 
+                # Success
+                print("\n\nAnimagine: OK\n\n")
+        # QWEN-Image
+        """elif model=="Qwen/Qwen-Image":
+            # Test the QWEN-Image model
+            if test_qwen_image(prompt,access_token,negative_prompt)==-1:
+                # Failure
+                print("\n\nQWEN-Image: KO\n\n")
+            else:
+                # Success
+                print("\n\nQWEN-Image: OK\n\n")"""
         # Kandinsky
-        elif model=="kandinsky-community/kandinsky-2-2-decoder": 
+        """elif model=="kandinsky-community/kandinsky-2-2-decoder": 
             pass
             # Test the Kandinsky model
             if test_kandinsky(prompt,access_token,negative_prompt)==-1:
@@ -378,26 +405,7 @@ def test_models(access_token,models=[""], prompt=""):
                 print("Kandinsky: KO")
             else:
                 # Success
-                print("Kandinsky: OK")
-        # QWEN-Image
-        """elif model=="Qwen/Qwen-Image":
-            # Test the QWEN-Image model
-            if test_qwen_image(prompt,access_token,negative_prompt)==-1:
-                # Failure
-                print("\n\nQWEN-Image: KO")
-            else:
-                # Success
-                print("\n\nQWEN-Image: OK")"""
-
-        # Animagine XL
-        """elif model=="cagliostrolab/animagine-xl-4.0":
-            # Test the Animagine model
-            if test_animagine_XL(prompt, access_token, negative_prompt)==-1:
-                # Failure 
-                print("Animagine: KO")
-            else: 
-                # Success
-                print("Animagine: OK")"""
+                print("Kandinsky: OK")"""
 
 
     return 1
