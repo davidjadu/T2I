@@ -96,6 +96,12 @@ def test_qwen(prompt:str, access_token:str, negative_prompt:str, GPU="0"):
 
         # Free memory
         del content, output_ids, generated_ids, model_inputs, text, messages, model, tokenizer
+        # Collect garbage
+        gc.collect()
+        # Empty cuda cache
+        torch.cuda.empty_cache()
+        # Collect garbage
+        torch.cuda.ipc_collect()
 
         return 1
     
@@ -108,7 +114,7 @@ def test_qwen(prompt:str, access_token:str, negative_prompt:str, GPU="0"):
 
 def test_mindlink(prompt:str, access_token:str, negative_prompt:str, GPU="0"):
     """
-    Tests the Qwen model. 
+    Tests the Mindlink model. 
     Steps : 
     1. Loads the model and tokenizer
     2. Prepares the inputs. 
@@ -167,6 +173,12 @@ def test_mindlink(prompt:str, access_token:str, negative_prompt:str, GPU="0"):
 
         # Free memory
         del response, generated_ids, model_inputs, text, messages, model, tokenizer
+        # Collect garbage
+        gc.collect()
+        # Empty cuda cache
+        torch.cuda.empty_cache()
+        # Collect garbage
+        torch.cuda.ipc_collect()
 
         return 1
     
@@ -178,21 +190,132 @@ def test_mindlink(prompt:str, access_token:str, negative_prompt:str, GPU="0"):
 
 def test_deepseek(prompt:str, access_token:str, negative_prompt:str, GPU="0"):
     """
+    Tests the Deepseek model. 
+    Steps : 
+    1. Loads the model and tokenizer
+    2. Prepares the inputs. 
+    3. Performs inference (with max new tokens = 4000).
+    4. Retrieves the output and displays previous and currrent prompt.
+    
+    (str) prompt: The prompt for image generation.
+    (str) access_token: Access token for HuggingFace.
+    (str) negative_prompt: The negative prompt.
     """
 
-    return 1
+    # Initialize model name 
+    model_name  = "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+    # Initialize the start time
+    start_time = time.time()
 
-def test_gpt_oss(prompt:str, access_token:str, negative_prompt:str, GPU="0"):
-    """
-    """
+    try:
+        # Load tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        # Load model 
+        model = AutoModelForCausalLM.from_pretrained(model_name)
+        # Setup the messages
+        messages = [
+            {"role": "user", 
+             "content": prompt},
+        ]
+        # Set the inputs
+        inputs = tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
+        ).to(model.device)
 
-    return 1
+        # Get the output
+        outputs = model.generate(**inputs, max_new_tokens=40)
+        # Retrieve the response
+        response = tokenizer.decode(outputs[0][inputs["input_ids"].shape[-1]:])
+        # Display both prompts
+        print(f"Original prompt: {prompt}.\nGenerated prompt: {response}")
+
+        # Display elpased time
+        print(f"Elapsed time: {round(time.time()-start_time,2)} seconds.")
+
+        # Free memory
+        del response, outputs, inputs, messages, model, tokenizer
+        # Collect garbage
+        gc.collect()
+        # Empty cuda cache
+        torch.cuda.empty_cache()
+        # Collect garbage
+        torch.cuda.ipc_collect()
+        return 1
+    
+    except Exception: 
+        # Display error message
+        traceback.print_exc()
+        # Return failure 
+        return -1
 
 def test_phi(prompt:str, access_token:str, negative_prompt:str, GPU="0"):
     """
+    Tests the Phi-4 model. 
+    Steps : 
+    1. Loads the model and tokenizer
+    2. Prepares the inputs. 
+    3. Performs inference (with max new tokens = 4000).
+    4. Retrieves the output and displays previous and currrent prompt.
+    
+    (str) prompt: The prompt for image generation.
+    (str) access_token: Access token for HuggingFace.
+    (str) negative_prompt: The negative prompt.
     """
 
-    return 1
+    # Initialize model name 
+    model_name = "microsoft/Phi-4-reasoning-plus"
+
+    # Initialize the start time
+    start_time = time.time()
+
+    try:
+        # Load the tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        # Load the model
+        model = AutoModelForCausalLM.from_pretrained(model_name)
+        # Initialize the input
+        messages = [
+            {"role": "user", 
+             "content": prompt}
+            ]
+        # Setup the inputs
+        inputs = tokenizer.apply_chat_template(messages, 
+                                               tokenize=True, 
+                                               add_generation_prompt=True, 
+                                               return_tensors="pt")
+        # Retrieve the outputs
+        outputs = model.generate(**inputs, max_new_tokens=40)
+        # Retrieve the response
+        response = tokenizer.decode(outputs[0][inputs["input_ids"].shape[-1]:])
+
+        # Display both prompts
+        print(f"Original prompt: {prompt}.\nGenerated prompt: {response}")
+
+        # Display elpased time
+        print(f"Elapsed time: {round(time.time()-start_time,2)} seconds.")
+
+        # Free memory
+        del response, outputs, inputs, messages, model, tokenizer
+        # Collect garbage
+        gc.collect()
+        # Empty cuda cache
+        torch.cuda.empty_cache()
+        # Collect garbage
+        torch.cuda.ipc_collect()
+
+        return 1
+
+    
+    except Exception: 
+        # Display error message
+        traceback.print_exc()
+        # Return failure 
+        return -1
+    
 
 def test_models(access_token,models=[""], prompt="", GPU="0"):
     """
@@ -204,35 +327,8 @@ def test_models(access_token,models=[""], prompt="", GPU="0"):
 
     # Loop through the models
     for model in models: 
-        # Mindlink 32B
-        if model=="Skywork/MindLink-32B-0801":
-            # Test the stable diffusion model
-            if test_mindlink(prompt,access_token,negative_prompt,GPU)==-1:
-                # Failure 
-                print("\n\nSkyword: KO\n\n")
-            else:
-                # Success
-                print("\n\nSkyword: OK\n\n")
-        # Deepseek
-        elif model=="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B":
-            # Test the stable diffusion model
-            if test_deepseek(prompt,access_token,negative_prompt,GPU)==-1:
-                # Failure 
-                print("\n\nDeepseek: KO\n\n")
-            else:
-                # Success
-                print("\n\nDeepseek: OK\n\n")
-        # GPT-oss
-        elif model=="openai/gpt-oss-20b":
-            # Test the stable diffusion model
-            if test_gpt_oss(prompt,access_token,negative_prompt,GPU)==-1:
-                # Failure 
-                print("\n\nGPT-oss: KO\n\n")
-            else:
-                # Success
-                print("\n\nGPT-oss: OK\n\n")
         # Phi-4
-        elif model=="microsoft/phi-4":
+        if model=="microsoft/Phi-4-reasoning-plus":
             # Test the stable diffusion model
             if test_phi(prompt,access_token,negative_prompt,GPU)==-1:
                 # Failure 
@@ -240,6 +336,24 @@ def test_models(access_token,models=[""], prompt="", GPU="0"):
             else:
                 # Success
                 print("\n\nPhi-4: OK\n\n")
+        # Deepseek
+        """elif model=="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B":
+            # Test the stable diffusion model
+            if test_deepseek(prompt,access_token,negative_prompt,GPU)==-1:
+                # Failure 
+                print("\n\nDeepseek: KO\n\n")
+            else:
+                # Success
+                print("\n\nDeepseek: OK\n\n")"""
+        # Mindlink 32B
+        """elif model=="Skywork/MindLink-32B-0801":
+            # Test the stable diffusion model
+            if test_mindlink(prompt,access_token,negative_prompt,GPU)==-1:
+                # Failure 
+                print("\n\nSkyword: KO\n\n")
+            else:
+                # Success
+                print("\n\nSkyword: OK\n\n")"""
         # Qwen 30b
         """elif model=="Qwen/Qwen3-30B-A3B-Instruct-2507": 
             # Test the stable cascade model
@@ -285,8 +399,7 @@ def main():
         "Qwen/Qwen3-30B-A3B-Instruct-2507",
         "Skywork/MindLink-32B-0801", 
         "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
-        "openai/gpt-oss-20b", 
-        "microsoft/phi-4"
+        "microsoft/Phi-4-reasoning-plus"
         ]
     # Load the models 
     test_models(access_token, MODELS, PROMPT, GPU)
