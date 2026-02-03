@@ -77,7 +77,8 @@ class MetaPromptGeneration:
         if Skills.EMOTION in skills:
             for emotion in scene['emotion']:
                 template += f" Include a person showing {emotion}."
-
+        
+        # Set a negative prompt
         template += " Output ONLY prompt, no comment, no explanations."
 
         print("Generated Scene:", scene)

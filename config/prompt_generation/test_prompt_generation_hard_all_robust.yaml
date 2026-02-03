@@ -1,0 +1,19 @@
+experiment:
+  name: "full_robust_hard"
+
+prompt_generation:
+  metadata_config:
+    name: "coco"
+  skills:
+    - level: "hard"
+      skills: ["counting", "color", "spatial", "size", "emotion", "text"]
+      robustness: ["typos", "consistency"]
+      k: 5
+  llm_model:
+    name: "openai"
+    model: "gpt-4"
+    temperature: 1.5
+  samples_per_skill: 2
+
+output:
+  file: "outputs/prompts/all_skills_hard_robust.json"
