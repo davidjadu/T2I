@@ -1,9 +1,12 @@
+import argparse
 import gc
 import os
 import time
 import torch
 import traceback
-from diffusers import  DiffusionPipeline, StableCascadeCombinedPipeline, ZImagePipeline, StableDiffusionXLPipeline
+from accelerate import Accelerator
+from diffusers import  DiffusionPipeline, StableCascadeCombinedPipeline, \
+    ZImagePipeline, StableDiffusionXLPipeline
 from dotenv import load_dotenv
 
 
@@ -23,7 +26,7 @@ def load_environment() -> str:
     return access_token
 
 
-def test_stable_cascade(prompt:str, access_token:str, negative_prompt=""):
+def test_stable_cascade(prompt:str, access_token:str, negative_prompt="", GPU="0"):
     """
     Tests the Stable Cascade model. 
     Steps : 
@@ -44,7 +47,7 @@ def test_stable_cascade(prompt:str, access_token:str, negative_prompt=""):
         pipe = StableCascadeCombinedPipeline.from_pretrained("stabilityai/stable-cascade", 
                                                              variant="bf16", 
                                                              torch_dtype=torch.bfloat16, 
-                                                             access_token=access_token).to("cuda:0")
+                                                             access_token=access_token).to(f"cuda:{GPU}")
         # Run inference
         pipe(
             prompt=prompt,
@@ -87,14 +90,9 @@ def test_qwen_image(prompt:str, access_token:str, negative_prompt=""):
     (str) negative_prompt: The negative prompt.
     """
 
-    # Load the pipeline
-    if torch.cuda.is_available():
-        torch_dtype = torch.bfloat16
-        device = "cuda:0"
-    else:
-        torch_dtype = torch.float32
-        device = "cpu"
-    
+    # Initialize the accelerator
+    accelerator = Accelerator()
+
     # Initialize the start time 
     start_time = time.time() 
 
@@ -102,11 +100,20 @@ def test_qwen_image(prompt:str, access_token:str, negative_prompt=""):
     try:
         # Initialize the pipe
         pipe = DiffusionPipeline.from_pretrained("Qwen/Qwen-Image", 
-                                                 torch_dtype=torch_dtype, 
-                                                 access_token=access_token).to(device)
+                                                 torch_dtype=torch.bfloat16, 
+                                                 access_token=access_token)
+        
+        # Pipeline ---> Distributed GPUs
+        pipe = accelerator.prepare(pipe)
+
+        # Find where the Unet lives
+        noise_device = pipe.transformer.device
+
+        # Creating the generator on that device 
+        generator = torch.Generator(device=noise_device).manual_seed(42)
         
         # Set image size
-        width, height = 1024
+        width = height = 1024
         # Generate the image 
         image = pipe(
             prompt, 
@@ -115,10 +122,12 @@ def test_qwen_image(prompt:str, access_token:str, negative_prompt=""):
             height=height,
             num_inference_steps=10, 
             true_cfg_scale=3.0, 
-            generator=torch.Generator(device="cuda:0").manual_seed(42)
+            generator=generator
         ).images[0]
-        # Display elapsed time
-        print(f"Elapsed time for QWEN [bfloat16] : {round(time.time()-start_time,2)} seconds.")
+
+        if accelerator.is_main_process:
+            # Display elapsed time
+            print(f"Elapsed time for QWEN [bfloat16] : {round(time.time()-start_time,2)} seconds.")
         # Free memory
         del(image)
         del(pipe)
@@ -137,7 +146,7 @@ def test_qwen_image(prompt:str, access_token:str, negative_prompt=""):
         return -1
 
 
-def test_z_image(prompt:str, access_token:str, negative_prompt=""):
+def test_z_image(prompt:str, access_token:str, negative_prompt="", GPU="0"):
     """
     Tests the Z-Image model. 
     Steps : 
@@ -157,13 +166,17 @@ def test_z_image(prompt:str, access_token:str, negative_prompt=""):
         # Setup the pipe
         pipe = ZImagePipeline.from_pretrained("Tongyi-MAI/Z-Image-Turbo", 
                                               torch_dtype=torch.bfloat16, 
-                                              low_cpu_mem_usage=False).to("cuda:0")
+                                              access_token=access_token,
+                                              low_cpu_mem_usage=False).to(f"cuda:{GPU}")
+        # Enable cpu offload (reducing memory)
+        pipe.enable_model_cpu_offload()
+
         # Run inference
         image = pipe(
             prompt=prompt, 
             height=1024,
             width=1024, 
-            num_inference_steps=10, 
+            num_inference_steps=9, 
             guidance_scale=0.0, 
             generator=torch.Generator("cuda:0").manual_seed(42)
         ).images[0]
@@ -189,7 +202,7 @@ def test_z_image(prompt:str, access_token:str, negative_prompt=""):
         return -1
 
 
-def test_stable_diffusion(prompt:str, access_token:str, negative_prompt=""):
+def test_stable_diffusion(prompt:str, access_token:str, negative_prompt="", GPU="0"):
     """
     Tests the Stable Diffusion model. 
     Steps : 
@@ -211,7 +224,7 @@ def test_stable_diffusion(prompt:str, access_token:str, negative_prompt=""):
                                                  torch_dtype=torch.float16, 
                                                  use_safetensors=True, 
                                                  access_token=access_token,
-                                                 variant="fp16", ).to("cuda:0")
+                                                 variant="fp16", ).to(f"cuda:{GPU}")
         # Run inference 
         images = pipe(
             prompt=prompt,
@@ -239,7 +252,7 @@ def test_stable_diffusion(prompt:str, access_token:str, negative_prompt=""):
         return -1
 
 
-#def test_kandinsky(prompt:str, access_token:str, negative_prompt=""):
+def test_kandinsky(prompt:str, access_token:str, negative_prompt="", GPU="0"):
     """
     Tests the Kandinsky model. 
     Steps : 
@@ -256,19 +269,23 @@ def test_stable_diffusion(prompt:str, access_token:str, negative_prompt=""):
     start_time = time.time()
 
     try:
-        # Setup the pipeline
-        pipe = AutoPipelineForText2Image.from_pretrained("kandinsky-community/kandinsky-2-2-decoder", 
-                                                         torch_dtype=torch.float16).to("cuda:0")
-        # Run inference
-        image = pipe(
-            prompt=prompt, 
-            negative_prompt=negative_prompt, 
-            prior_guidance_scale =1.0, height=1024, width=1024).images[0]
-        # Display elapsed time 
+
+        # Load the prior 
+        prior = DiffusionPipeline.from_pretrained( "kandinsky-community/kandinsky-2-2-prior", 
+                                                  torch_dtype=torch.bfloat16).to(f"cuda:{GPU}")
+        # Load the decoder
+        decoder = DiffusionPipeline.from_pretrained( "kandinsky-community/kandinsky-2-2-decoder", 
+                                                    torch_dtype=torch.bfloat16).to(f"cuda:{GPU}")
+        # Get the prior output
+        prior_output = prior(prompt=prompt, negative_prompt=negative_prompt)
+        # Get the image from embeddings
+        image = decoder(image_embeds=prior_output.image_embeds, 
+                        negative_image_embeds=prior_output.negative_image_embeds)
+        
         print(f"Elapsed time : {round(time.time()-start_time,2)} seconds.")
         # Free memory
-        del(image)
-        del(pipe)
+        del image, prior_output, decoder, prior
+        #del(pipe)
         # Collect garbage
         gc.collect()
         # Empty cuda cache
@@ -285,7 +302,7 @@ def test_stable_diffusion(prompt:str, access_token:str, negative_prompt=""):
         return -1
     
 
-def test_animagine_XL(prompt:str, access_token:str, negative_prompt=""):
+def test_animagine_XL(prompt:str, access_token:str, negative_prompt="", GPU="0"):
     """
     Tests the Animagine model. 
     Steps : 
@@ -309,7 +326,7 @@ def test_animagine_XL(prompt:str, access_token:str, negative_prompt=""):
             use_safetensors=True,
             custom_pipeline="lpw_stable_diffusion_xl",
             add_watermarker=False
-        ).to("cuda:0")
+        ).to(f"cuda:{GPU}")
         # Run inference
         image = pipe(
             prompt, 
@@ -337,10 +354,23 @@ def test_animagine_XL(prompt:str, access_token:str, negative_prompt=""):
         # Display error message
         traceback.print_exc()
         return -1
+    
 
+def initialize_parser():
+    """
+    """
 
+    # Initializing the parser 
+    parser = argparse.ArgumentParser(description="Test script for evaluating gen models.\nLoads the models and runs \
+                                     a 10-step inference, generating a 1024x1024 image, without a negative prompt.\n\
+                                     The same prompt is used for every model.")
 
-def test_models(access_token,models=[""], prompt=""):
+    # Add arguments 
+    parser.add_argument("--gpu", choices=["0", "1", "2"], default="0", help="Preferred GPU number.")
+
+    return parser
+
+def test_models(access_token,models=[""], prompt="", GPU="0"):
     """
     Loops through the list of models and test each independently. 
     """
@@ -354,7 +384,7 @@ def test_models(access_token,models=[""], prompt=""):
         # Stable cascade 
         if model=="stabilityai/stable-cascade": 
             # Test the stable cascade model
-            if test_stable_cascade(prompt, access_token,negative_prompt)==-1:
+            if test_stable_cascade(prompt, access_token,negative_prompt,GPU)==-1:
                 # Failure
                 print("\n\nStable cascade : KO\n\n")
             else:
@@ -363,7 +393,7 @@ def test_models(access_token,models=[""], prompt=""):
         # Stable diffusion
         elif model=="stabilityai/stable-diffusion-xl-base-1.0":
             # Test the stable diffusion model
-            if test_stable_diffusion(prompt,access_token,negative_prompt)==-1:
+            if test_stable_diffusion(prompt,access_token,negative_prompt,GPU)==-1:
                 # Failure 
                 print("\n\nStable Diffusion: KO\n\n")
             else:
@@ -372,7 +402,7 @@ def test_models(access_token,models=[""], prompt=""):
         # Z-turbo
         elif model=="Tongyi-MAI/Z-Image-Turbo": 
             # Test the Z-image Turbo model
-            if test_z_image(prompt,access_token,negative_prompt)==-1:
+            if test_z_image(prompt,access_token,negative_prompt,GPU)==-1:
                 # Failure 
                 print("\n\nZ-image Turbo: KO\n\n")
             else: 
@@ -381,12 +411,22 @@ def test_models(access_token,models=[""], prompt=""):
         # Animagine XL
         elif model=="cagliostrolab/animagine-xl-4.0":
             # Test the Animagine model
-            if test_animagine_XL(prompt, access_token, negative_prompt)==-1:
+            if test_animagine_XL(prompt, access_token, negative_prompt,GPU)==-1:
                 # Failure 
                 print("\n\nAnimagine: KO\n\n")
             else: 
                 # Success
                 print("\n\nAnimagine: OK\n\n")
+        # Kandinsky
+        elif model=="kandinsky-community/kandinsky-2-2-prior": 
+            pass
+            # Test the Kandinsky model
+            if test_kandinsky(prompt,access_token,negative_prompt,GPU)==-1:
+                # Failure
+                print("\n\nKandinsky: KO\n\n")
+            else:
+                # Success
+                print("\n\nKandinsky: OK\n\n")
         # QWEN-Image
         """elif model=="Qwen/Qwen-Image":
             # Test the QWEN-Image model
@@ -396,16 +436,6 @@ def test_models(access_token,models=[""], prompt=""):
             else:
                 # Success
                 print("\n\nQWEN-Image: OK\n\n")"""
-        # Kandinsky
-        """elif model=="kandinsky-community/kandinsky-2-2-decoder": 
-            pass
-            # Test the Kandinsky model
-            if test_kandinsky(prompt,access_token,negative_prompt)==-1:
-                # Failure
-                print("Kandinsky: KO")
-            else:
-                # Success
-                print("Kandinsky: OK")"""
 
 
     return 1
@@ -414,6 +444,18 @@ def main():
     """
     Main script
     """
+    # Free memory
+    gc.collect()
+    # Empty cuda cache
+    torch.cuda.empty_cache()
+    # Collect garbage
+    torch.cuda.ipc_collect()
+
+    # Parse arguments 
+    parser = initialize_parser()
+    # Set the GPU
+    GPU = parser.parse_args().gpu
+
     # Load environment and get access token
     access_token = load_environment()
     # Test prompt
@@ -424,12 +466,12 @@ def main():
         "stabilityai/stable-cascade", 
         "stabilityai/stable-diffusion-xl-base-1.0",
         "Qwen/Qwen-Image", 
-        "kandinsky-community/kandinsky-2-2-decoder",
+        "kandinsky-community/kandinsky-2-2-prior",
         "cagliostrolab/animagine-xl-4.0"
         ]
     # Load the models 
-    test_models(access_token, MODELS, PROMPT)
-        
+    test_models(access_token, MODELS, PROMPT, GPU)
+
 
 if __name__=="__main__":
     # Load the main
