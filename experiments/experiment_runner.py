@@ -102,17 +102,23 @@ class ExperimentRunner:
         print(f"{len(files)} .yaml files.\n")
         # Loop through the files
         for path in files:
-            # Display the current file
-            print(f"\n\nFile : {path}\n\n")
-            try:
-                # Generate prompt for that file
-                self.run_prompt_generation(path)
-            except Exception:
-                # Display error message 
-                traceback.print_exc()
-                # Write in the logs file
-                with open("prompt_generation/logs.txt", "a+") as log_file:
-                    log_file.write(f"Error for config {path}.")
+            # Check if the file doesn't exist
+            json_path = Path("outputs/prompts") / path.with_suffix(".json").name
+
+            if not json_path.exists():
+                # Display the current file
+                print(f"\n\nFile : {path}\n\n")
+                try:
+                    # Generate prompt for that file
+                    self.run_prompt_generation(path)
+                except Exception:
+                    # Display error message 
+                    traceback.print_exc()
+                    # Write in the logs file
+                    with open("prompt_generation/logs.txt", "a+") as log_file:
+                        log_file.write(f"\nError for config {path}.\n")
+            else: 
+                print("\nSkipping the current file.\n")
 
 
     def run_evaluation(self, config_path):

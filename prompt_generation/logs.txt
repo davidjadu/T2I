@@ -1,0 +1,2 @@
+
+Error for config config/prompt_generation/color+emotion_robust.yaml.
