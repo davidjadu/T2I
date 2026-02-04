@@ -1,5 +1,6 @@
 from pathlib import Path
 import yaml
+import traceback
 import json
 import os
 from prompt_generation.prompt_generation import MetaPromptGeneration, PromptGeneration
@@ -102,9 +103,16 @@ class ExperimentRunner:
         # Loop through the files
         for path in files:
             # Display the current file
-            print(f"File : {path}")
-            # Generate prompt for that file
-            self.run_prompt_generation(path)
+            print(f"\n\nFile : {path}\n\n")
+            try:
+                # Generate prompt for that file
+                self.run_prompt_generation(path)
+            except Exception:
+                # Display error message 
+                traceback.print_exc()
+                # Write in the logs file
+                with open("prompt_generation/logs.txt", "a+") as log_file:
+                    log_file.write(f"Error for config {path}.")
 
 
     def run_evaluation(self, config_path):

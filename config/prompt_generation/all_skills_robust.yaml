@@ -19,7 +19,7 @@ prompt_generation:
       k: 2
   llm_model:
     name: "openai"
-    model: "gpt-5"
+    model: "gpt-5-mini"
     temperature: 1
   samples_per_skill: 1
 

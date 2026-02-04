@@ -7,7 +7,7 @@ import os
 class OpenaiLLM(BaseLLM):
     def __init__(
         self,
-        model: str = "gpt-5",
+        model: str = "gpt-5-mini",
         temperature: float = 1
     ):
         self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
