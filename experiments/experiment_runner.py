@@ -1,3 +1,4 @@
+from pathlib import Path
 import yaml
 import json
 import os
@@ -87,6 +88,24 @@ class ExperimentRunner:
 
         print(f"Generated {len(all_prompts)} prompts saved to: {output_file}")
         print("Prompt generation completed")
+    
+    def run_prompt_generation_all(self):
+        """
+        Generates prompts for all the .yaml files in the config folder.
+        """
+
+        # Set the base directory
+        base_dir = Path("config/prompt_generation")
+        # Get the file names
+        files = [p for p in base_dir.glob("*") if p.is_file()]
+        print(f"{len(files)} .yaml files.\n")
+        # Loop through the files
+        for path in files:
+            # Display the current file
+            print(f"File : {path}")
+            # Generate prompt for that file
+            self.run_prompt_generation(path)
+
 
     def run_evaluation(self, config_path):
         """Evaluate generated images"""

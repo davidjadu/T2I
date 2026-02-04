@@ -12,6 +12,10 @@ def main():
     generate_parser = subparsers.add_parser('generate', help='Generate synthetic prompts')
     generate_parser.add_argument('--config', required=True, help='Path to prompt generation config')
 
+    # 'Generate all' command
+    subparsers.add_parser('generate_all', help='Generate synthetic prompts for\
+                                                all the yaml files.')
+
     # Evaluate command
     evaluate_parser = subparsers.add_parser('evaluate', help='Evaluate generated images')
     evaluate_parser.add_argument('--config', required=True, help='Path to evaluation config')
@@ -28,6 +32,8 @@ def main():
 
         if args.command == 'generate':
             runner.run_prompt_generation(args.config)
+        elif args.command== 'generate_all':
+            runner.run_prompt_generation_all()
         elif args.command == 'evaluate':
             runner.run_evaluation(args.config)
 

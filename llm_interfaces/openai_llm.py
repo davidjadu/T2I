@@ -7,8 +7,8 @@ import os
 class OpenaiLLM(BaseLLM):
     def __init__(
         self,
-        model: str = "gpt-35-turbo",
-        temperature: float = 0.7
+        model: str = "gpt-5",
+        temperature: float = 1
     ):
         self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         self.api_key = os.getenv("AZURE_OPENAI_API_KEY")
