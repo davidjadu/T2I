@@ -80,7 +80,7 @@ def generate_image_animagine(code_file,GPU="0"):
     output_dir_name = "../../data/images_refactored/animagine"
     output_dir = Path(output_dir_name)
     # Get the list of files to generate
-    output_files = [p for p in output_dir.glob("*") if p.is_file()]
+    output_files = [p._str for p in output_dir.glob("*") if p.is_file()]
 
     try: 
         # Import relevant packages
@@ -118,7 +118,7 @@ def generate_image_animagine(code_file,GPU="0"):
                         output_file_name = set_output_name(model_name, skill_code, 
                                                            prompt_level,prompt_number,j,output_dir_name, robust)
                         # Check if the file doesn't exist
-                        if output_file_name not in output_files:
+                        if output_file_name+".png" not in output_files:
                             # Display the output file name
                             print(f"\nOutput file name: {output_file_name}")
                             # Run inference ; generate the image
@@ -160,7 +160,7 @@ def generate_image_stable_diffusion(code_file,GPU="0"):
     output_dir_name = "../../data/images_refactored/stable_diffusion"
     output_dir = Path(output_dir_name)
     # Get the list of files to generate
-    output_files = [p for p in output_dir.glob("*") if p.is_file()]
+    output_files = [p._str for p in output_dir.glob("*") if p.is_file()]
     output_files.sort()
 
     try: 
@@ -204,7 +204,7 @@ def generate_image_stable_diffusion(code_file,GPU="0"):
                                                            output_folder_name=output_dir_name, 
                                                            robust=robust)
                         # Check if the file doesn't exist
-                        if output_file_name not in output_files:
+                        if output_file_name+".png" not in output_files:
                             # Display the output file name
                             print(f"\nOutput file name: {output_file_name}")
                             # Run inference ; generate the image
@@ -258,7 +258,7 @@ def generate_z_image(code_file,GPU="0"):
     output_dir_name = "../../data/images_refactored/z_image_turbo"
     output_dir = Path(output_dir_name)
     # Get the list of files to generate
-    output_files = [p for p in output_dir.glob("*") if p.is_file()]
+    output_files = [p._str for p in output_dir.glob("*") if p.is_file()]
 
     try: 
         # Import relevant packages
@@ -291,12 +291,12 @@ def generate_z_image(code_file,GPU="0"):
                     # Get the prompt infos
                     prompt_number, prompt_level, synthetic_prompts = extract_prompt_info(prompt)
                     # Loop through the synthetic prompts
-                    for i,gen_prompt in enumerate(synthetic_prompts):
+                    for j,gen_prompt in enumerate(synthetic_prompts):
                         # Set the output file name
                         output_file_name = set_output_name(model_name, skill_code, 
-                                                           prompt_level,prompt_number,i, output_dir_name, robust)
+                                                           prompt_level,prompt_number,j, output_dir_name, robust)
                         # Check if the file doesn't exist
-                        if output_file_name not in output_files:
+                        if output_file_name+".png" not in output_files:
                             # Display the output file name
                             print(f"\nOutput file name: {output_file_name}")
                             # Run inference ; generate the image
