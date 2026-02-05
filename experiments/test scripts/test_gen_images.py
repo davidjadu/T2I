@@ -4,7 +4,6 @@ import pandas as pd
 import gc
 import os
 from pathlib import Path
-import time
 import torch
 import traceback
 from dotenv import load_dotenv
@@ -87,21 +86,13 @@ def generate_image_animagine(code_file,GPU="0"):
         # Import relevant packages
         from diffusers import StableDiffusionXLPipeline
         # Setup the pipe
-        """pipe = StableDiffusionXLPipeline.from_pretrained(
+        pipe = StableDiffusionXLPipeline.from_pretrained(
             "cagliostrolab/animagine-xl-4.0",
             torch_dtype=torch.float16,
             use_safetensors=True,
             custom_pipeline="lpw_stable_diffusion_xl",
             add_watermarker=False
-        ).to(f"cuda:{GPU}")"""
-        # Setup the pipe
-        """pipe = StableDiffusionXLPipeline.from_pretrained(
-            "cagliostrolab/animagine-xl-4.0",
-            torch_dtype=torch.float16,
-            use_safetensors=True,
-            custom_pipeline="lpw_stable_diffusion_xl",
-            add_watermarker=False
-        ).to(f"cuda:{GPU}")"""
+        ).to(f"cuda:{GPU}")
         # Set the elements 
         model_name = "animagine"
         # Display a message
@@ -129,19 +120,24 @@ def generate_image_animagine(code_file,GPU="0"):
                         # Check if the file doesn't exist
                         if output_file_name not in output_files:
                             # Display the output file name
-                            print(f"Output file name: {output_file_name}")
-
-            #print(f"File name : {json_file} - Skill code : {skill_code}")
-        # Run inference
-        """image = pipe(
-            prompt, 
-            negative_prompt=negative_prompt, 
-            width=1024,
-            height=1024, 
-            guidance_scale=5, 
-            num_inference_steps=10
-        )"""
+                            print(f"\nOutput file name: {output_file_name}")
+                            # Run inference ; generate the image
+                            image = pipe(
+                                gen_prompt, 
+                                width=1024,
+                                height=1024, 
+                                guidance_scale=5, 
+                                num_inference_steps=28, 
+                                generator=torch.Generator(f"cuda:{GPU}").manual_seed(42) #Setting the seed to be more deterministic
+                            ).images[0]
+                            # Save image
+                            image.save(output_file_name+".png")
+                            # Display success message
+                            print(f"\nImage generated for : {output_file_name}. Prompt: {gen_prompt}")
+                            break
+                        break
         # Free memory
+        del image, pipe
         # Collect garbage
         gc.collect()
         # Empty cuda cache
@@ -154,6 +150,98 @@ def generate_image_animagine(code_file,GPU="0"):
         # Display exception
         traceback.print_exc()
 
+def generate_image_stable_diffusion(code_file,GPU="0"):
+    """
+    """
+    # Set the json outputs directory (.json)
+    json_dir = Path("../../outputs/prompts")
+    # Get the list of json files
+    json_files = [p for p in json_dir.glob("*") if p.is_file()]
+    # Set the image output directory
+    output_dir_name = "../../data/images_refactored/stable_diffusion"
+    output_dir = Path(output_dir_name)
+    # Get the list of files to generate
+    output_files = [p for p in output_dir.glob("*") if p.is_file()]
+
+    try: 
+        # Import relevant packages
+        from diffusers import StableDiffusionXLPipeline
+        from sd_embed.embedding_funcs import get_weighted_text_embeddings_sdxl
+        # Setup the pipe
+        pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", 
+                                                 torch_dtype=torch.float16, 
+                                                 use_safetensors=True,
+                                                 variant="fp16").to(f"cuda:{GPU}")
+        
+        
+        # Set the elements 
+        model_name = "stable_diffusion"
+        # Display a message
+        print("\nGenerating images with stable diffusion.\n")
+        # Loop through the files
+        for i,json_file in enumerate(json_files):
+            print(json_file)
+            # Extract the skill code
+            skill_code, robust = extract_code_and_robust(code_file,os.path.basename(json_file))
+            # Initialize the collection
+            elements = dict()
+            # Open the file
+            with open(json_file, "rb") as file:
+                # Load the elements into a dict
+                elements = json.load(file)
+                # Loop through the prompts
+                for prompt in elements["prompts"]:
+                    # Get the prompt infos
+                    prompt_number, prompt_level, synthetic_prompts = extract_prompt_info(prompt)
+                    # Loop through the synthetic prompts
+                    for i,gen_prompt in enumerate(synthetic_prompts):
+                        # Set the output file name
+                        output_file_name = set_output_name(model_name, skill_code, 
+                                                           prompt_level,prompt_number,i, output_dir_name, robust)
+                        # Check if the file doesn't exist
+                        if output_file_name not in output_files:
+                            # Display the output file name
+                            print(f"\nOutput file name: {output_file_name}")
+                            # Run inference ; generate the image
+                            with torch.no_grad():
+                                # Adding support for long prompts
+                                (prompt_embeds, 
+                                 prompt_neg_embeds,
+                                 pooled_prompt_embeds,
+                                 negative_pooled_prompt_embeds) = get_weighted_text_embeddings_sdxl(
+                                     pipe,
+                                     prompt = gen_prompt,
+                                )
+                                image = pipe(
+                                    prompt_embeds=prompt_embeds,
+                                    negative_prompt_embeds=prompt_neg_embeds,
+                                    pooled_prompt_embeds=pooled_prompt_embeds,
+                                    negative_pooled_prompt_embeds=negative_pooled_prompt_embeds,
+                                    width=1024,
+                                    height=1024, 
+                                    guidance_scale=5, 
+                                    num_inference_steps=50, 
+                                    generator=torch.Generator(f"cuda:{GPU}").manual_seed(42) #Setting the seed to be more deterministic
+                                ).images[0]
+                                # Save image
+                                image.save(output_file_name+".png")
+                            # Display success message
+                            print(f"\nImage generated for : {output_file_name}. Prompt: {gen_prompt}")
+                            break
+                        break
+        # Free memory
+        del image, pipe
+        # Collect garbage
+        gc.collect()
+        # Empty cuda cache
+        torch.cuda.empty_cache()
+        # Collect garbage
+        torch.cuda.ipc_collect()
+        
+        return 1
+    except Exception:
+        # Display exception
+        traceback.print_exc()
 
 
 def initialize_parser():
@@ -173,7 +261,7 @@ def initialize_parser():
                                             "runway", 
                                             "stable_cascade", 
                                             "stable_diffusion", 
-                                            "z_image"], default="animagine"),
+                                            "z_image"], default="stable_diffusion"),
     
 
     return parser
@@ -201,6 +289,9 @@ def main():
     if MODEL=="animagine":
         # Generate images with animagine
         generate_image_animagine(code_file,GPU)
+    elif MODEL=="stable_diffusion":
+        # Generate images with stable diffusion
+        generate_image_stable_diffusion(code_file,GPU)
 
 
 
