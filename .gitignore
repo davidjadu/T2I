@@ -3,6 +3,7 @@ data/images_refactored/
 data/images_metadata/
 
 outputs/
+annotations/
 
 test.ipynb
 
